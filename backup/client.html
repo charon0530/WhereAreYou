@@ -1,0 +1,375 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,  initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <title>WhereAreYou</title>
+    <!--네이버 지도에 관한 스크립트-->
+    <script type="text/javascript" src="https://openapi.map.naver.com/openapi/v3/maps.js?clientId=PC7hvf1nvacZGsaC7Vif"></script>
+    <!--제이쿼리 스크립트-->
+    <script src="https://code.jquery.com/jquery-3.3.1.js"
+            integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60="
+            crossorigin="anonymous"></script>
+    <!--소켓io 스크립트-->
+    <script src="/socket.io/socket.io.js"></script>
+    <!--bootstrap css-->
+    <link rel="stylesheet" href="css/bootstrap.css">
+    <style>
+        .chat_log {
+            width: 90%;
+            height: 100px;
+            margin: auto;
+        }
+        .name {
+            width: 10%;
+        }
+        .message {
+            width: 70%;
+        }
+        .chat {
+            width: 10%;
+        }
+    </style>
+    <script>
+        //https 로 변환
+        if (location.href == 'http://' + location.host+ '/client.html') {
+            alert('http로 접속하셨습니다.\nhttps로 변경합니다.');
+            location.href = 'https://' + location.host + '/client.html';
+        }
+
+        $(document).ready(function () {
+            var client_id;
+            var client_lat;
+            var client_lan;
+            var user_count;
+            var _MAX_USER_NUMBER = 30;
+            var agent = navigator.userAgent.toLowerCase();
+            //alert(agent)
+            //지도 크기 및 스타일
+            $('#map').css('width', (parseInt($(window).width())) *0.9 + 'px');
+            $('#map').css('height', (parseInt($(window).height())) * 0.6 + 'px');
+            $('#map').css('border', '1px solid black');
+            $('#map').css('margin', 'auto');
+
+            // 브라우저 사이즈 감지
+            $(window).resize(function() {
+                $('#map').css('width', (parseInt($(window).width())) * 0.9 + 'px');
+                $('#map').css('height', (parseInt($(window).height())) * 0.6 + 'px');
+            })
+
+            //새로고침 버튼
+            $('#refresh').click(function(){
+                location.reload();
+            })
+
+            //맵의 디폴트 옵션값
+            var mapOptions = {
+                center: new naver.maps.LatLng(37.3595704, 127.105399),
+                zoom: 10,
+                disableKineticPan: false
+
+            }
+            //맵 생성
+            var map = new naver.maps.Map('map', mapOptions);
+            //디폴트 위치값
+            var position = new naver.maps.LatLng(37.3595704, 127.105399)
+            //디폴트 마커 옵션
+            var markerOptions = {
+                position: position,
+                map: map,
+                visible: false,
+                icon: {
+                    url: 'http://static.naver.com/maps2/icons/pin_spot2.png',
+                    size: new naver.maps.Size(33, 44),
+                    origin: new naver.maps.Point(0, 0),
+                    anchor: new naver.maps.Point(11, 35)
+                }
+            };
+            var markers = [];
+            for (var marker_num = 0; marker_num < _MAX_USER_NUMBER; marker_num++) {
+                markers.push(new naver.maps.Marker(markerOptions));
+            }
+            //var marker = new naver.maps.Marker(markerOptions);
+            function degreesToRadians(degrees) {
+                radians = (degrees * Math.PI) / 180;
+                return radians;
+            }
+            function computeDistance(start_lat, start_lan, dest_lat, dest_lan) {
+                var startLatRads = degreesToRadians(start_lat);
+                var startLongRads = degreesToRadians(start_lan);
+                var destLatRads = degreesToRadians(dest_lat);
+                var destLongRads = degreesToRadians(dest_lan);
+
+                var Radius = 6371; //지구의 반경(km)
+                var distance = Math.acos(Math.sin(startLatRads) * Math.sin(destLatRads) +
+                                Math.cos(startLatRads) * Math.cos(destLatRads) *
+                                Math.cos(startLongRads - destLongRads)) * Radius;
+
+                return distance;
+            }
+            function onSuccessGeolocation(position) {
+                client_lat = position.coords.latitude;
+                client_lan = position.coords.longitude;
+                var gps_location = new naver.maps.LatLng(client_lat, client_lan);
+                map.setCenter(gps_location); // 얻은 좌표를 지도의 중심으로 설정합니다.
+                map.setZoom(10); // 지도의 줌 레벨을 변경합니다.
+            }
+
+            function onSuccessGeolocation_2(position) {
+                client_lat = position.coords.latitude;
+                client_lan = position.coords.longitude;
+                var gps_location = new naver.maps.LatLng(client_lat, client_lan);
+                //alert('gps성공')
+            }
+
+            function onErrorGeolocation() { alert("GPS가 꺼져있거나, GPS 오류입니다.") }
+            //GPS를 지원하면
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(onSuccessGeolocation, onErrorGeolocation);
+                navigator.geolocation.watchPosition(onSuccessGeolocation_2, onErrorGeolocation);
+            }
+            else {
+                alert('GPS를 지원하지 않습니다');
+            }
+
+
+            $('#get').click(function () {
+                var request = new XMLHttpRequest();
+                request.open('GET', '/user_count', true);
+                request.send();
+               // alert(request.responseText);
+
+                // 비동기방식
+                request.onreadystatechange = function (event) {
+                    if (request.readyState == 4) {
+                        if (request.status == 200) {
+                            /*
+                            alert(request.responseText);
+                            var location = JSON.parse(request.responseText);
+                            alert(location.LAT);
+                            */
+                            alert(request.responseText);
+                        }
+                    }
+                }
+
+            })
+            client_id = prompt("Input your id");
+
+            //시작
+            //$('#post').click(function () {
+                //client_id = prompt("Input your id");
+            if (client_id == null || client_id == '') {
+                alert('Input ID!')
+                location.reload();
+            }
+            else {
+                var socket = io();
+                socket.emit('send_cId', client_id);
+
+
+                var post_request = new XMLHttpRequest();
+                post_request.open('POST', '/location/' + client_id, true);
+                post_request.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+                post_request.send('client_lat=' + client_lat + '&client_lan=' + client_lan);
+                post_request.onreadystatechange = function (event) {
+                    if (post_request.readyState == 4) {
+                        if (post_request.status == 200) {
+                            // alert('POST성공');
+                            //alert(post_request.responseText);
+                            if (post_request.responseText == '아이디가 중복되었습니다.') { return 0; }
+                            //실시간 위치 변경(반복만들기)
+                            setInterval(function () {
+                                var put_request = new XMLHttpRequest();
+                                put_request.open('PUT', '/location/' + client_id, true);
+                                put_request.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+                                put_request.send('client_lat=' + client_lat + '&client_lan=' + client_lan);
+                                put_request.onreadystatechange = function (event) {
+                                    if (put_request.readyState == 4) {
+                                        if (put_request.status == 200) {
+                                            //유저 수 측정
+                                            var count_request = new XMLHttpRequest();
+                                            count_request.open('GET', '/user_count', true);
+                                            count_request.send();
+                                            count_request.onreadystatechange = function (event) {
+                                                if (count_request.readyState == 4) {
+                                                    if (count_request.status == 200) {
+                                                        //alert(count_request.responseText);
+                                                        user_count = Number(count_request.responseText);
+
+                                                        for (var i = 0; i < user_count; i++) {
+                                                            (function (i) {
+
+                                                                var get_request = new XMLHttpRequest();
+                                                                get_request.open('GET', '/locations/' + i, true);
+                                                                get_request.send();
+
+                                                                get_request.onreadystatechange = function (event) {
+                                                                    if (get_request.readyState == 4) {
+                                                                        if (get_request.status == 200) {
+                                                                            if (get_request.responseText != '') {
+                                                                                var user_location = JSON.parse(get_request.responseText);
+                                                                                var n_user_location = new naver.maps.LatLng(user_location.LAT, user_location.LAN);
+                                                                                var marker_user_id = user_location.ID;
+
+                                                                                markers[i].setVisible(true);
+                                                                                markers[i].setPosition(n_user_location);
+                                                                                markers[i].setTitle(marker_user_id);
+
+                                                                                distance = computeDistance(client_lat,client_lan,user_location.LAT,user_location.LAN);
+                                                                                var infowindow = new naver.maps.InfoWindow({
+                                                                                    content: 'ID : '+user_location.ID+'  '+'Distance : '+distance+'km'
+                                                                                });
+                                                                            naver.maps.Event.addListener(markers[i], "click", function (e) {
+                                                                                if (infowindow.getMap()) {
+                                                                                    infowindow.close();
+                                                                                } else {
+                                                                                    infowindow.open(map, markers[i]);
+                                                                                    setTimeout(function () {
+                                                                                        infowindow.close();
+                                                                                    },1000*3)
+                                                                                }
+                                                                            });
+
+                                                                            }
+
+
+                                                                        }
+                                                                        else { }//get_request 에러
+                                                                    }
+                                                                }
+                                                            })(i);
+
+                                                        }
+                                                    }
+                                                    else { }//count_request 에러
+                                                }
+                                            }
+                                        }
+                                        else { }  //put_request 에러
+                                    }
+                                }
+                            }, 1000 * 0.3);
+                        }
+                        else {
+                            alert('err')//post_request에러
+                        }
+
+                    }
+                }
+            }
+            //})
+
+            setInterval(function () {
+                for (var i = 0; i < markers.length; i++) { (function (i) { markers[i].setVisible(false) })(i) }
+            }, 1000 * 3);
+
+
+            $('#del').click(function () {
+                var del_request = new XMLHttpRequest();
+                del_request.open('DELETE', '/location/' + client_id, true);
+                del_request.send();
+                del_request.onreadystatechange = function (event) {
+                    if (del_request.readyState == 4) {
+                        if (del_request.status == 200) {
+                            for (var i = 0; i < markers.length; i++) {
+                                if (client_id == markers[i].getTitle()) {
+                                    markers[i].setMap(null);
+                                    markers.splice(i, 1);
+                                }
+                            }
+                            alert(del_request.responseText);
+                        }
+                        else{alert("오류")}
+                    }
+                }
+            })
+            
+            var agent = navigator.userAgent.toLowerCase();
+            //모바일 크롬에서 창 닫기(해결 X)
+            if (agent.indexOf("chrome") != -1 && agent.indexOf("android") != -1) {
+                window.addEventListener ("beforeunload",function (e) {
+                    var del_request = new XMLHttpRequest();
+                    del_request.open('DELETE', '/location/' + client_id, true);
+                    del_request.send();
+                    del_request.onreadystatechange = function (event) {
+                        if (del_request.readyState == 4) {
+                            if (del_request.status == 200) {
+                                for (var i = 0; i < markers.length; i++) {
+                                    if (client_id == markers[i].getTitle()) {
+                                        markers[i].setMap(null);
+                                        markers.splice(i, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+            }
+                //데스크탑 크롬에서 창 닫기
+            else if (agent.indexOf("chrome") != -1) {
+                $(window).bind('beforeunload', function (e) {
+                    var del_request = new XMLHttpRequest();
+                    del_request.open('DELETE', '/location/' + client_id, true);
+                    del_request.send();
+                    del_request.onreadystatechange = function (event) {
+                        if (del_request.readyState == 4) {
+                            if (del_request.status == 200) {
+                                for (var i = 0; i < markers.length; i++) {
+                                    if (client_id == markers[i].getTitle()) {
+                                        markers[i].setMap(null);
+                                        markers.splice(i, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+            }
+
+            //채팅에 관한 스크립트
+
+
+            $('#chat').on('submit', function (e) {
+                    socket.emit('send message', client_id, $('#message').val());
+                    $('#message').val('');
+                    $('#message').focus();
+                    e.preventDefault();
+        });
+        socket.on('receive message', function (msg) {
+            $('#chatLog').append(msg + '\n');
+            $('#chatLog').scrollTop($('#chatLog')[0].scrollHeight);
+        })
+        socket.on('change name', function (name) {
+            $('#name').val(name);
+        });
+ });
+
+    </script>
+</head>
+<body>
+    <div id="map" style="width:100%;height:400px;"></div>
+    <div id="space" style="height:5px"></div>
+    <div style="text-align:center">
+        <textarea id="chatLog"  class="chat_log" readonly></textarea>
+    </div>
+    <div style="text-align:center;margin:5px;">
+        <form id="chat">
+            <input id="name" class="name" type="text" readonly>
+            <input id="message" class="message" type="text">
+            <input type="submit" class="chat" value="chat" />
+        </form>
+    </div>
+        <!--
+        <button id="refresh" class="btn btn-primary">REFRESH</button>
+        -->
+        <button id="get" class="btn btn-primary">사용자 수</button>
+        <!--
+        <button id="post" class="btn">POST</button>
+        -->
+        <button id="del" class="btn btn-primary">프로그램 종료</button>
+
+        <script src="js/bootstrap.js"></script>
+</body>
+</html>
