@@ -128,7 +128,7 @@
 
             function onSuccessGeolocation_2(position) {
                 var new_distance = computeDistance(client_lat, client_lan, position.coords.latitude, position.coords.longitude);
-                if (new_distance >= 0.003) { // 테스트하기
+                if (new_distance >= 0) { 
                     client_walkdistance += new_distance;
                 }
                 client_lat = position.coords.latitude;
