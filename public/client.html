@@ -117,7 +117,13 @@
 
                 return distance;
             }
-
+            // 초기화를 위한 시간
+            var intervalID = setInterval(function () {
+                client_walkdistance = 0;
+            },100)
+            setTimeout(function () {
+                clearInterval(intervalID);
+            }, 3000);
             function onSuccessGeolocation(position) {
                 client_lat = position.coords.latitude;
                 client_lan = position.coords.longitude;
@@ -128,7 +134,7 @@
 
             function onSuccessGeolocation_2(position) {
                 var new_distance = computeDistance(client_lat, client_lan, position.coords.latitude, position.coords.longitude);
-                if (new_distance >= 0) { 
+                if (new_distance >= 0.0005) {  //한번에 변화한 정도가 50cm 이상
                     client_walkdistance += new_distance;
                 }
                 client_lat = position.coords.latitude;
